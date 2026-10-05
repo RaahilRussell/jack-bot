@@ -1,60 +1,75 @@
 # Jack
 
-Jack is a Discord companion for Hypixel guilds that handles Minecraft account verification, applications, game-stat leaderboards, moderation, guild activity reports, and community utilities. Originally built as an early programming project, it was restored and modernized into a tested, maintainable Python application while keeping its Minecraft character and playful commands.
+Jack is a Discord-based management and analytics bot for a competitive gaming community on [Hypixel](https://support.hypixel.net/hc/en-us/articles/360019495360-How-to-Join-the-Hypixel-Server), a large multiplayer Minecraft server. A Hypixel **guild** is a persistent team or community of players. Members compete in different games and use Discord for conversations, recruitment, and administration.
 
-## Highlights
+Hypixel exposes player statistics, account information, and guild membership through an API, but staff make membership decisions in Discord. Staff otherwise have to look up applicants, compare statistics, identify inactive members, and update Discord roles manually.
 
-- Asynchronous Hypixel/Mojang REST integration with a shared HTTP session, bounded requests, and paced Hypixel calls.
-- Pillow-generated Bedwars, Skywars, and Duels leaderboard cards using the original Minecraft map backgrounds.
-- SQLite persistence for application records and complete guild-stat snapshots, with database work off the event loop.
-- Account verification against Hypixel-linked Discord usernames and private application channels tracked across restarts.
-- Permission-aware moderation, role hierarchy checks, scoped channel deletion, and credentials supplied through environment configuration.
-- Offline behavioral tests, Ruff and mypy checks, and GitHub Actions CI across Python 3.11–3.14.
+Jack brings those records into Discord. Players verify accounts and apply to join; staff review applications, inspect rankings and activity reports, and moderate from chat. Application state persists across restarts, and collected statistics become rankings and generated leaderboard images.
 
-## Demo / Screenshots
+## What Jack does
 
-Screenshots will be added after a live test-server run. The [capture guide](docs/screenshots/README.md) describes the leaderboard, application, and verification views to include and how to keep them anonymous.
+### Player verification
 
-<!-- Add only reviewed, anonymized captures of actual bot output here, with descriptive alt text. -->
+Minecraft and Discord accounts have separate usernames. To verify, a player adds their Discord username to their Hypixel profile and gives Jack their Minecraft name. Jack retrieves the profile and compares its linked Discord username with the person running the command.
 
-## Features
+Discord roles provide membership labels and permissions. After a match, Jack assigns member or guest roles based on guild membership, applies configured rank roles, and attempts a nickname update.
 
-- **Hypixel & Minecraft:** profile lookups, linked Discord accounts, Bedwars void deaths, and eligibility checks.
-- **Guild management:** weekly activity reports, member requirement reports, and manual invitation logging.
-- **Applications & verification:** automatic eligibility checks, private staff review, waiting lists, and configured membership roles.
-- **Leaderboards:** top-ten image cards, full rankings, and averages for Bedwars, Skywars, Duels, and Bridge wins.
-- **Moderation:** timed mutes, role-based indefinite mutes, kicks, bans, unbans, and role inspection.
-- **Community & utilities:** staff-approved quotes, animal images, ping, Mango, and optional channel-scoped deleted-message retrieval.
+### Applications and membership
 
-## Architecture
+An applicant supplies a Minecraft username. Jack looks up their competitive statistics and checks the guild's admission thresholds. Eligible applicants receive an Accepted role and are added to a waiting list. Applicants below the thresholds get a private channel where staff can review their statistics and current guild membership before deciding.
 
-Discord commands live in six cogs. They call shared services for HTTP, calculations, storage, and rendering; configuration stays outside command logic.
+Each review channel has a SQLite record identifying its applicant, so staff can accept or deny the correct application after a restart. Channels are private from creation, duplicate open applications are rejected, and closing commands only affect recorded applications. Invitation logs record the issuing staff member and the applicant’s eligibility. Sending the actual in-game invitation remains a staff action.
+
+### Competitive statistics and leaderboards
+
+Jack ranks guild members across Bedwars, Skywars, and Duels, different competitive games within Hypixel. Rankings include wins, player eliminations, experience levels, and performance ratios.
+
+A win/loss ratio compares victories with defeats. A kill/death ratio compares opponents eliminated with the player's own deaths. Bedwars also distinguishes **final** eliminations, after which a player cannot return to that match; **FKDR** is final kills divided by final deaths. “Stars” represent a game's experience level. Jack combines Bedwars stars and FKDR into an admission score called an index: `stars × FKDR²`.
+
+Rankings can be returned as a full text list or a top-ten card generated with Pillow over Minecraft map artwork. The same stat calculations feed the rankings, averages, and eligibility checks, keeping those results consistent.
+
+### Guild activity
+
+Guild experience measures a player's contribution through gameplay. Jack reports members below the weekly experience threshold and the percentage of the guild they represent. A separate report identifies members below the competitive requirements for existing members; those thresholds differ from admission requirements.
+
+Guild averages summarize each supported competitive statistic. Leaderboards, averages, and the member-requirement report use saved snapshots and display when the data was collected. Reports inform staff decisions without automatically removing members.
+
+### Moderation and community tools
+
+Staff can issue timed mutes, indefinite role-based mutes, kicks, bans, and unbans. Commands check Discord permissions and role hierarchy, and timed mutes use Discord timeouts that expire without keeping the bot running.
+
+Community tools include reaction-based quote approval, animal images, a latency check, and Mango's optional video replies. Deleted-message retrieval is disabled by default; when enabled, it exposes only the latest cached deleted text in the same channel within a five-minute window.
+
+## How it works
+
+Jack is an asynchronous Discord application built with discord.py. Commands and event listeners live in **cogs**, discord.py's command-group modules. Mojang's API resolves Minecraft names to account identifiers; Hypixel's API provides player and guild data.
 
 ```text
 jack/
-  bot.py          bot lifecycle, shared HTTP session, extension loading
-  cogs/           commands and Discord event listeners
-  api.py          Mojang/Hypixel requests and upstream error handling
-  stats.py        game formulas, eligibility rules, metric aliases
-  storage.py      SQLite application records and guild snapshots
-  rendering.py    leaderboard images using Pillow
+  bot.py          startup, extension loading, shared resources
+  cogs/           Discord commands and event listeners
+  api.py          HTTP requests and service error handling
+  stats.py        calculations, eligibility rules, metric aliases
+  storage.py      SQLite application records and stat snapshots
+  rendering.py    Pillow leaderboard cards
   config.py       environment-based settings
+  assets/         map backgrounds and font
+tests/            offline behavioral tests
 ```
 
-Extensions load once in `setup_hook`, and background jobs and the HTTP session close with the bot. SQLite operations and image rendering run through `asyncio.to_thread`. Guild scans publish only complete snapshots, so a failed refresh retains the last good result with its timestamp. Application records are keyed by channel instead of a shared “current applicant.”
+This separation keeps Discord interactions apart from calculations and storage. API calls share an aiohttp session with request timeouts and paced Hypixel requests. SQLite operations and image rendering run in worker threads, keeping that work off the event loop while the bot handles other commands.
 
-## Tech Stack
+A background job saves complete guild snapshots every two hours. Failed refreshes leave the previous snapshot available. SQLite stores snapshots and application records locally. Background tasks and the HTTP session close during shutdown.
 
-| Area | Technologies |
-| --- | --- |
-| Runtime & Discord | Python 3.11+, discord.py 2.x, asyncio |
-| APIs, state & images | aiohttp, SQLite, Pillow |
-| Quality | pytest, pytest-asyncio, Ruff, mypy |
-| Tooling & CI | uv, GitHub Actions |
+## Built with
 
-## Getting Started
+- **Application:** Python 3.11+, discord.py, asyncio, aiohttp
+- **Storage and images:** SQLite, Pillow
+- **Development:** pytest, Ruff, mypy, uv, GitHub Actions
 
-Install Python 3.11+ and [uv](https://docs.astral.sh/uv/getting-started/installation/), then run from the repository directory:
+## Running Jack
+
+Install [uv](https://docs.astral.sh/uv/getting-started/installation/) and Python 3.11+, then run from the repository directory:
 
 ```sh
 uv sync --locked
@@ -62,7 +77,7 @@ cp .env.example .env
 uv run python -m jack --check
 ```
 
-The startup check loads all command groups without credentials or network requests. To connect, set `DISCORD_TOKEN` in `.env`; add `HYPIXEL_API_KEY` and `HYPIXEL_GUILD` for guild features. Enable Discord's **Message Content** and **Server Members** intents and configure the bot's permissions using the [setup guide](docs/setup.md).
+The check loads all command groups without connecting to Discord. Set `DISCORD_TOKEN`, `HYPIXEL_API_KEY`, and `HYPIXEL_GUILD` in `.env`, then follow [server setup](docs/setup.md) for Discord intents, roles, permissions, and persistent storage.
 
 ```sh
 uv run python -m jack
@@ -70,19 +85,18 @@ uv run python -m jack
 
 ## Commands
 
-Start with `j!help`, `j!check MinecraftName`, or `j!lb bw star`. The prefix is configurable.
+The default prefix is `j!`. Replace `MinecraftName` with a player's username.
 
-The [complete command reference](docs/commands.md) covers arguments, aliases, permissions, cooldowns, and leaderboard metrics.
+| Command | Purpose |
+| --- | --- |
+| `j!verify MinecraftName` | Match a linked account and update Discord membership roles. |
+| `j!apply MinecraftName` | Check admission eligibility and start the application workflow. |
+| `j!lb bw wins` | Rank guild members by Bedwars wins and generate a leaderboard card. |
+| `j!avg duels wlr` | Show the guild's average Duels win/loss ratio. |
+| `j!inactive` | Report members below the weekly activity threshold. |
+| `j!help` | Show available command groups and usage. |
 
-## Background / Restoration
-
-The restoration preserves the original bot's guild workflows, prefix commands, game formulas, and Minecraft imagery. The focus was making an early project reliable, understandable, and maintainable while removing private configuration and identity-specific behavior. Historical contributors and asset creators remain acknowledged in [CREDITS.md](CREDITS.md).
-
-## Modernization
-
-The major changes are a modern discord.py runtime, shared async HTTP, SQLite replacing external database assumptions, reusable stat/rendering logic, persistent applications, safer permissions and moderation, environment-based configuration, privacy cleanup, and automated tests and CI.
-
-See the [migration notes](docs/modernization.md) for behavioral differences and the [verification record](docs/verification.md) for checks and remaining live-test limits.
+The [command reference](docs/commands.md) covers arguments, aliases, permissions, and cooldowns.
 
 ## Development
 
@@ -95,4 +109,6 @@ uv run python -m jack --check
 uv build
 ```
 
-Tests use local fixtures and mocks; they do not send Discord messages or require API credentials. A real test server is still needed to validate live permissions and account linking.
+Tests cover calculations, API failures, permissions, application isolation, persistence, rendering, and startup without external credentials. GitHub Actions runs checks on Python 3.11–3.14. Actual role assignment and authenticated integrations still need the [live test-server checks](docs/setup.md#live-smoke-test-checklist).
+
+Contributors and asset attribution are listed in [CREDITS.md](CREDITS.md).

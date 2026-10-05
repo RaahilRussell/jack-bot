@@ -1,0 +1,44 @@
+[build-system]
+requires = ["hatchling>=1.27,<2"]
+build-backend = "hatchling.build"
+
+[project]
+name = "jack-guild-bot"
+version = "0.2.0"
+description = "A restored Discord companion for Hypixel guilds."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+  "discord.py>=2.7.1,<3",
+  "aiohttp>=3.14.4,<4",
+  "Pillow>=12.3,<13",
+  "python-dotenv>=1.2.4,<2",
+]
+
+[project.scripts]
+jack-bot = "jack.bot:main"
+
+[dependency-groups]
+dev = [
+  "pytest>=9.1,<10", "pytest-asyncio>=1.4,<2", "ruff>=0.16.10,<0.17",
+  "mypy>=2.4,<3", "build>=1.6,<2", "pip-audit>=2.10,<3",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["jack"]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F", "I", "UP", "B", "ASYNC"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+
+[tool.mypy]
+python_version = "3.11"
+check_untyped_defs = true
+files = ["jack"]

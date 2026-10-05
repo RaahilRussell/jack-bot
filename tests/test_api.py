@@ -89,3 +89,43 @@ async def test_timeout_is_not_exposed():
     with pytest.raises(ServiceError, match="Could not read") as failure:
         await API(session).json("https://example.invalid")
     assert "private details" not in str(failure.value)
+
+
+@pytest.mark.parametrize("authenticated", [True, False])
+async def test_redirect_does_not_forward_credential_headers(authenticated):
+    received_keys = []
+    runners = []
+
+    async def destination(request):
+        received_keys.append(request.headers.get("API-Key"))
+        return web.json_response({"success": True})
+
+    async def serve(handler):
+        app = web.Application()
+        app.router.add_get("/", handler)
+        runner = web.AppRunner(app)
+        runners.append(runner)
+        await runner.setup()
+        site = web.TCPSite(runner, "127.0.0.1", 0)
+        await site.start()
+        return f"http://127.0.0.1:{site._server.sockets[0].getsockname()[1]}/"
+
+    try:
+        target = await serve(destination)
+
+        async def redirect(request):
+            raise web.HTTPFound(target)
+
+        source = await serve(redirect)
+        async with aiohttp.ClientSession() as session:
+            api = API(session)
+            if authenticated:
+                with pytest.raises(ServiceError):
+                    await api.json(source, headers={"API-Key": "fixture-secret"})
+                assert received_keys == []
+            else:
+                assert await api.json(source) == {"success": True}
+                assert received_keys == [None]
+    finally:
+        for runner in reversed(runners):
+            await runner.cleanup()

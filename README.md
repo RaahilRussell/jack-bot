@@ -1,115 +1,88 @@
 # Jack
 
-A Discord companion for a Hypixel guild: Minecraft account verification, guild applications, game-stat leaderboards, moderation, and a few deliberately silly commands. Built with Python and discord.py.
+Jack is a Discord companion for Hypixel guilds that handles Minecraft account verification, applications, game-stat leaderboards, moderation, guild activity reports, and community utilities. Originally built as an early programming project, it was restored and modernized into a tested, maintainable Python application while keeping its Minecraft character and playful commands.
 
-## Background
+## Highlights
 
-This project is a restored and modernized version of an early programming project. The implementation has been cleaned up while preserving its guild-focused commands, Minecraft leaderboard cards, and playful personality.
+- Asynchronous Hypixel/Mojang REST integration with a shared HTTP session, bounded requests, and paced Hypixel calls.
+- Pillow-generated Bedwars, Skywars, and Duels leaderboard cards using the original Minecraft map backgrounds.
+- SQLite persistence for application records and complete guild-stat snapshots, with database work off the event loop.
+- Account verification against Hypixel-linked Discord usernames and private application channels tracked across restarts.
+- Permission-aware moderation, role hierarchy checks, scoped channel deletion, and credentials supplied through environment configuration.
+- Offline behavioral tests, Ruff and mypy checks, and GitHub Actions CI across Python 3.11–3.14.
+
+## Demo / Screenshots
+
+Screenshots will be added after a live test-server run. The [capture guide](docs/screenshots/README.md) describes the leaderboard, application, and verification views to include and how to keep them anonymous.
+
+<!-- Add only reviewed, anonymized captures of actual bot output here, with descriptive alt text. -->
 
 ## Features
 
-- Bedwars, Skywars, Duels, and Bridge leaderboards, with top-ten image cards and full text lists.
-- Guild stat averages, application eligibility checks, and member activity reports.
-- Private application channels, persistent applicant tracking, acceptance, and invitation logging.
-- Verification against the Discord username linked on a Hypixel profile.
-- Timed mutes, kicks, bans, unbans, and role inspection.
-- Staff-approved quote submissions, animal images, Mango, and a latency check.
+- **Hypixel & Minecraft:** profile lookups, linked Discord accounts, Bedwars void deaths, and eligibility checks.
+- **Guild management:** weekly activity reports, member requirement reports, and manual invitation logging.
+- **Applications & verification:** automatic eligibility checks, private staff review, waiting lists, and configured membership roles.
+- **Leaderboards:** top-ten image cards, full rankings, and averages for Bedwars, Skywars, Duels, and Bridge wins.
+- **Moderation:** timed mutes, role-based indefinite mutes, kicks, bans, unbans, and role inspection.
+- **Community & utilities:** staff-approved quotes, animal images, ping, Mango, and optional channel-scoped deleted-message retrieval.
+
+## Architecture
+
+Discord commands live in six cogs. They call shared services for HTTP, calculations, storage, and rendering; configuration stays outside command logic.
+
+```text
+jack/
+  bot.py          bot lifecycle, shared HTTP session, extension loading
+  cogs/           commands and Discord event listeners
+  api.py          Mojang/Hypixel requests and upstream error handling
+  stats.py        game formulas, eligibility rules, metric aliases
+  storage.py      SQLite application records and guild snapshots
+  rendering.py    leaderboard images using Pillow
+  config.py       environment-based settings
+```
+
+Extensions load once in `setup_hook`, and background jobs and the HTTP session close with the bot. SQLite operations and image rendering run through `asyncio.to_thread`. Guild scans publish only complete snapshots, so a failed refresh retains the last good result with its timestamp. Application records are keyed by channel instead of a shared “current applicant.”
+
+## Tech Stack
+
+| Area | Technologies |
+| --- | --- |
+| Runtime & Discord | Python 3.11+, discord.py 2.x, asyncio |
+| APIs, state & images | aiohttp, SQLite, Pillow |
+| Quality | pytest, pytest-asyncio, Ruff, mypy |
+| Tooling & CI | uv, GitHub Actions |
 
 ## Getting Started
 
-Install Python **3.11 or newer** and [uv](https://docs.astral.sh/uv/getting-started/installation/). From this repository's directory:
+Install Python 3.11+ and [uv](https://docs.astral.sh/uv/getting-started/installation/), then run from the repository directory:
 
 ```sh
 uv sync --locked
 cp .env.example .env
-```
-
-Edit `.env` and set `DISCORD_TOKEN` to a Discord **bot** token. For Hypixel features, also set `HYPIXEL_API_KEY` and `HYPIXEL_GUILD`. Obtain the key from the [Hypixel developer dashboard](https://developer.hypixel.net/). Never commit `.env`.
-
-In the [Discord developer portal](https://discord.com/developers/applications), enable **Message Content Intent** and **Server Members Intent**, then invite the bot to your server with the `bot` scope. No slash-command registration is required.
-
-Grant View Channels, Send Messages, Embed Links, Attach Files, Read Message History, and Add Reactions. Features that need more permissions are listed below; Administrator is unnecessary.
-
-| Feature | Additional bot permissions / setup |
-| --- | --- |
-| Verification | Manage Roles, Manage Nicknames; `Member`, `Guest`, and optional `Unverified` roles |
-| Applications | Manage Channels, Manage Roles; `Staff`, `Accepted`, and `#invite-waiting-list` |
-| Invitation log | `#invite-log` |
-| Quote review | Manage Messages; `#quote-book-submissions` and `#quote-book` |
-| Moderation | Moderate Members, Kick Members, Ban Members as appropriate |
-| Indefinite mute | Manage Roles and a `Muted` role with channel overrides denying sending/speaking |
-
-Place Jack's role above roles it assigns and members it moderates. Staff moderation commands require the matching Discord moderation permission. Application and invitation commands accept the configured `Staff` role or Manage Server; quote review accepts that role or Manage Messages. Presence changes and the bounded `spam` command are bot-owner-only.
-
-Role and channel names can be changed in `.env`. Optional `GUILD_RANK_ROLES` maps in-game ranks to Discord role names, for example `GUILD_RANK_ROLES={"Veteran":"Veteran"}`. Only map roles you intend verification to assign; no staff ranks are mapped by default.
-
-## Running
-
-Check that all command groups load without logging in or making network requests:
-
-```sh
 uv run python -m jack --check
 ```
 
-Run the bot:
+The startup check loads all command groups without credentials or network requests. To connect, set `DISCORD_TOKEN` in `.env`; add `HYPIXEL_API_KEY` and `HYPIXEL_GUILD` for guild features. Enable Discord's **Message Content** and **Server Members** intents and configure the bot's permissions using the [setup guide](docs/setup.md).
 
 ```sh
 uv run python -m jack
 ```
 
-`uv run jack-bot` and `uv run python main.py` are equivalent entry points. Keep the process running on your host; there is no embedded web server or artificial keep-alive service.
+## Commands
 
-The default prefix is `j!`. Set `COMMAND_PREFIX` to change it.
+Start with `j!help`, `j!check MinecraftName`, or `j!lb bw star`. The prefix is configurable.
 
-```text
-j!help
-j!check MinecraftName
-j!requirements
-j!apply MinecraftName
-j!verify MinecraftName
-j!lb bw star
-j!lb duels bridge_wins all
-j!avg sw kdr
-j!inactive
-j!gamereqs
-j!mute @member 10m a reason
-j!unmute @member
-j!mango
-```
+The [complete command reference](docs/commands.md) covers arguments, aliases, permissions, cooldowns, and leaderboard metrics.
 
-Use `accept`, `deny`, or `deletechannel` inside a recorded application channel. `invited MinecraftName` records a manual invite; it does not send an in-game invitation. `discord MinecraftName` reads the profile's publicly linked Discord username; `void MinecraftName` counts Bedwars void deaths.
+## Background / Restoration
 
-Mango always replies with “Mango...”. To add videos, place your own `.mp4` or `.mov` files in the ignored `media/` directory. Old personal clips are not bundled. `snipe` is opt-in through `ENABLE_SNIPE=true`; it exposes the last deleted text message only in its original channel for five minutes. Restarting clears that in-memory cache.
-
-## Project Structure
-
-```text
-jack/
-  bot.py             startup, lifecycle, and embedded help
-  config.py          environment settings
-  api.py             asynchronous Minecraft/Hypixel HTTP requests
-  stats.py           game formulas and metric aliases
-  storage.py         local SQLite state
-  rendering.py       image leaderboard cards
-  cogs/              community, fun, moderation, Hypixel, leaderboards, errors
-  assets/            original clean map backgrounds and font
-tests/               offline behavioral tests
-```
-
-## Technical Notes
-
-- One shared HTTP session, request timeouts, and paced Hypixel calls keep the Discord event loop responsive. Hypixel uses its [v2 API](https://api.hypixel.net/) with the key in an HTTP header.
-- Complete guild snapshots refresh every two hours. A failed refresh retains the previous snapshot; responses display its timestamp. The first scan can take several minutes for a large guild. Server downtime does not expire saved snapshots.
-- SQLite state lives in `data/jack.sqlite3`. Keep `data/` on persistent storage for applications and cached leaderboards; run one Jack process per data directory. No MongoDB server is needed.
-- Timed mutes use Discord timeouts, which survive restarts and expire automatically. Omitting the duration applies the configured `Muted` role; Discord role/channel overrides determine its effect, and other roles may override a denial. Existing roles are never stripped.
-- The original application rule is index ≥ 2,000, or index ≥ 1,000 plus 3,000 Duels wins and 2 WLR. The original existing-member report intentionally has lower thresholds. `requirements` explains both. Index is stars × FKDR²; zero-denominator ratios retain the original value of zero.
-- Verification compares the Hypixel-linked Discord username, not a display name. It is not an OAuth account-linking service. Applications are staff recruitment tools; `apply` does not prove ownership of the supplied Minecraft account.
+The restoration preserves the original bot's guild workflows, prefix commands, game formulas, and Minecraft imagery. The focus was making an early project reliable, understandable, and maintainable while removing private configuration and identity-specific behavior. Historical contributors and asset creators remain acknowledged in [CREDITS.md](CREDITS.md).
 
 ## Modernization
 
-Duplicate leaderboard code now shares one calculation and rendering path. Application state is scoped to its channel and survives restarts. Network failures produce useful messages, missing roles are validated, channel deletion is limited to recorded applications, and moderation respects hierarchy. Generated screenshots, old personal metadata, bytecode, unused dependencies, and the obsolete web keep-alive service have been removed.
+The major changes are a modern discord.py runtime, shared async HTTP, SQLite replacing external database assumptions, reusable stat/rendering logic, persistent applications, safer permissions and moderation, environment-based configuration, privacy cleanup, and automated tests and CI.
 
-The restoration keeps prefix commands and the simple cog architecture. See [migration notes](docs/modernization.md) for deliberate behavior changes and [credits](CREDITS.md) for retained third-party attribution. The original repository supplied no project-wide license; this restoration does not invent one.
+See the [migration notes](docs/modernization.md) for behavioral differences and the [verification record](docs/verification.md) for checks and remaining live-test limits.
 
 ## Development
 
@@ -122,4 +95,4 @@ uv run python -m jack --check
 uv build
 ```
 
-The tests use local fixtures and mocks, with no credentials or Discord messages. Live guild permissions and API credentials still need a test-server check before deployment.
+Tests use local fixtures and mocks; they do not send Discord messages or require API credentials. A real test server is still needed to validate live permissions and account linking.

@@ -13,7 +13,12 @@ dist/
 data/
 media/
 *.sqlite3*
+*.sqlite
+*.sqlite-*
+*.db
+*.db-*
 *.log
+logs/
 .DS_Store
 .idea/
 .vscode/

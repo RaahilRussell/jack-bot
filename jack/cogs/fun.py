@@ -13,7 +13,7 @@ class Fun(commands.Cog):
     @commands.command(name="cat", aliases=["rpanda", "panda", "bird", "koala", "duck", "penguin"])
     @commands.cooldown(1, 2, commands.BucketType.user)
     async def animal(self, ctx):
-        """Show a random animal: cat, rpanda, panda, bird, koala, duck, penguin."""
+        """Show an animal image: cat, rpanda, panda, bird, koala, duck, penguin."""
         animal = (ctx.invoked_with or "cat").lower()
         if animal == "duck":
             data = await self.bot.api.json("https://random-d.uk/api/random")

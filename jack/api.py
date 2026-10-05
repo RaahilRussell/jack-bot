@@ -28,7 +28,12 @@ class API:
     ) -> dict[str, Any]:
         try:
             async with self.session.get(
-                url, params=params, headers=headers, timeout=aiohttp.ClientTimeout(total=20)
+                url,
+                params=params,
+                headers=headers,
+                timeout=aiohttp.ClientTimeout(total=20),
+                # Redirect handling does not strip custom API-Key headers.
+                allow_redirects=not bool(headers),
             ) as response:
                 if response.status in (204, 404):
                     raise ServiceError("That player or resource could not be found.")

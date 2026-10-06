@@ -1,44 +1,134 @@
 # Jack
 
-Jack is a Discord-based management and analytics bot for a competitive gaming community on [Hypixel](https://support.hypixel.net/hc/en-us/articles/360019495360-How-to-Join-the-Hypixel-Server), a large multiplayer Minecraft server. A Hypixel **guild** is a persistent team or community of players. Members compete in different games and use Discord for conversations, recruitment, and administration.
+Jack is a Discord bot built for running a competitive guild on [Hypixel](https://hypixel.net/), one of Minecraft's largest multiplayer servers.
 
-Hypixel exposes player statistics, account information, and guild membership through an API, but staff make membership decisions in Discord. Staff otherwise have to look up applicants, compare statistics, identify inactive members, and update Discord roles manually.
+Hypixel guilds are persistent player communities: members play together, compete across different game modes, earn experience for the guild, and often use a separate Discord server to organize the community. That creates an awkward split between two systems — the game knows who players are and how they perform, while Discord is where applications, staff decisions, roles, rankings, and day-to-day community management happen.
 
-Jack brings those records into Discord. Players verify accounts and apply to join; staff review applications, inspect rankings and activity reports, and moderate from chat. Application state persists across restarts, and collected statistics become rankings and generated leaderboard images.
+Jack connects the two. It uses Hypixel's player and guild data inside Discord to verify members, handle applications, track activity and performance, maintain leaderboards, and give staff the tools to run the community without constantly switching between profiles, spreadsheets, and manual Discord administration.
 
 ## What Jack does
 
 ### Player verification
 
-Minecraft and Discord accounts have separate usernames. To verify, a player adds their Discord username to their Hypixel profile and gives Jack their Minecraft name. Jack retrieves the profile and compares its linked Discord username with the person running the command.
+A Discord username by itself does not prove which Minecraft account belongs to that person.
 
-Discord roles provide membership labels and permissions. After a match, Jack assigns member or guest roles based on guild membership, applies configured rank roles, and attempts a nickname update.
+Jack turns Hypixel's public profile linking into a lightweight account-verification system. A player first signs into Hypixel through Minecraft and adds their Discord username to the social links on their Hypixel profile. They then run Jack's verification command with their Minecraft username.
+
+Jack looks up that Minecraft account through the Mojang and Hypixel APIs and checks whether the Discord username published on the Hypixel profile matches the Discord user running the command.
+
+From the player's perspective, the flow is:
+
+```text
+Log into Minecraft / Hypixel
+        ↓
+Link Discord username on Hypixel profile
+        ↓
+Run j!verify <Minecraft username> in Discord
+        ↓
+Jack checks the Hypixel profile
+        ↓
+Published Discord username matches the invoking user
+        ↓
+Jack assigns the appropriate guild roles
+```
+
+Verification rejects a claimed Minecraft account unless its published Discord username matches the invoking user. This relies on the player keeping that profile link current.
+
+Once verified, Jack can distinguish between current guild members and other verified players, assign the configured Discord roles and guild-rank roles, and update the member's nickname to their Minecraft name when permissions allow. Discord roles provide membership labels and control access within the server.
 
 ### Applications and membership
 
-An applicant supplies a Minecraft username. Jack looks up their competitive statistics and checks the guild's admission thresholds. Eligible applicants receive an Accepted role and are added to a waiting list. Applicants below the thresholds get a private channel where staff can review their statistics and current guild membership before deciding.
+For an applicant, Jack turns joining the guild into a Discord workflow instead of a back-and-forth process with staff.
 
-Each review channel has a SQLite record identifying its applicant, so staff can accept or deny the correct application after a restart. Channels are private from creation, duplicate open applications are rejected, and closing commands only affect recorded applications. Invitation logs record the issuing staff member and the applicant’s eligibility. Sending the actual in-game invitation remains a staff action.
+An applicant only needs to provide their Minecraft username:
+
+```text
+j!apply PlayerName
+```
+
+Jack retrieves their Hypixel profile, calculates the statistics the guild uses for admissions, and checks whether they meet the current entry requirements.
+
+If the player already meets the requirements, Jack can place them directly into the accepted/waiting-list workflow so staff know they are ready for an in-game invitation.
+
+If they fall below the automatic requirements, Jack creates a private application channel for the applicant and guild staff. Staff can then review the player's account and make a manual decision rather than forcing every applicant through the same cutoff.
+
+This gives applicants a much cleaner experience:
+
+- no screenshots of stats
+- no manually filling out numbers that staff then have to verify
+- no searching through several stat websites
+- a private place to discuss an application
+- a clear accepted/denied outcome
+- persistent application state even if the bot restarts
+
+For staff, Jack also prevents duplicate open review channels, keeps each application tied to the submitting Discord user and supplied Minecraft account, posts accepted applicants to the waiting list, and records invitations. Account verification is a separate command; an application alone does not establish ownership of the supplied account.
+
+The actual in-game guild invite is intentionally left to staff rather than letting the bot control the Minecraft account.
 
 ### Competitive statistics and leaderboards
 
-Jack ranks guild members across Bedwars, Skywars, and Duels, different competitive games within Hypixel. Rankings include wins, player eliminations, experience levels, and performance ratios.
+Stats are not only used to decide who gets into the guild. They also give members something to compete over once they are inside it.
 
-A win/loss ratio compares victories with defeats. A kill/death ratio compares opponents eliminated with the player's own deaths. Bedwars also distinguishes **final** eliminations, after which a player cannot return to that match; **FKDR** is final kills divided by final deaths. “Stars” represent a game's experience level. Jack combines Bedwars stars and FKDR into an admission score called an index: `stars × FKDR²`.
+Jack collects statistics for every guild member across Bedwars, Skywars, and Duels and turns them into rankings that can be viewed directly in Discord.
 
-Rankings can be returned as a full text list or a top-ten card generated with Pillow over Minecraft map artwork. The same stat calculations feed the rankings, averages, and eligibility checks, keeping those results consistent.
+For someone unfamiliar with Hypixel, these are separate competitive game modes with their own progression systems and performance statistics. Jack tracks measurements such as:
 
-### Guild activity
+- wins
+- kills (opponents eliminated)
+- experience levels
+- win/loss ratio (victories divided by defeats)
+- kill/death ratio (opponents eliminated divided by the player's own deaths)
+- Bedwars final kills and final deaths
 
-Guild experience measures a player's contribution through gameplay. Jack reports members below the weekly experience threshold and the percentage of the guild they represent. A separate report identifies members below the competitive requirements for existing members; those thresholds differ from admission requirements.
+In Bedwars, a **final kill** eliminates a player for the remainder of the match. **FKDR** measures final kills per final death and is one of the common indicators of Bedwars performance. Jack can also calculate an index combining experience and performance, where **stars** represent the player's Bedwars experience level:
 
-Guild averages summarize each supported competitive statistic. Leaderboards, averages, and the member-requirement report use saved snapshots and display when the data was collected. Reports inform staff decisions without automatically removing members.
+`Bedwars stars × FKDR²`
+
+Members can request full rankings or top-ten leaderboard cards generated with Pillow over Minecraft map artwork.
+
+The purpose isn't just to display numbers. The leaderboards give members a reason to compete with each other, see where they stand within the guild, and work toward moving up the rankings. That gives the Discord server a recurring competitive element outside of individual matches and helps make guild membership feel more meaningful.
+
+The same centralized stat calculations are reused for leaderboards, guild averages, and membership checks, so the bot does not calculate the same metric differently in different parts of the system.
+
+### Guild monitoring and analytics
+
+A competitive guild has two related questions:
+
+1. **Are members still active?**
+2. **How is the current roster performing?**
+
+Hypixel awards **Guild Experience (GEXP)** when members play games. That experience contributes to the guild's overall progression, so guilds commonly use weekly GEXP as a rough indicator of whether members are actively contributing.
+
+Jack collects this information for the entire roster and turns it into staff-facing reports.
+
+The activity report identifies members below the guild's weekly contribution threshold and summarizes how much of the roster falls below it. Instead of manually opening profiles or maintaining a spreadsheet, staff can quickly see which members may have become inactive.
+
+A separate competitive-requirements report compares current members against the guild's ongoing performance expectations. Admission and retention requirements can be different: somebody does not necessarily need to continuously meet the exact bar they joined under.
+
+Jack also calculates guild-wide averages for supported statistics, giving the community a baseline for questions like:
+
+- What does the average guild member's performance look like?
+- Is a player above or below the guild average?
+- Which areas is the roster strongest in?
+- How do members compare with one another rather than with an arbitrary global number?
+
+Together, the leaderboards, averages, activity reports, and requirement reports turn raw Hypixel data into a small analytics layer for the guild. Rankings and averages show the timestamp of the latest saved snapshot; Jack does not store a historical time series.
+
+That gives staff better information for roster decisions while giving players a way to compare their current performance with the community.
+
+Jack does **not** automatically remove players based on these reports. It surfaces the data and leaves membership decisions to staff.
 
 ### Moderation and community tools
 
-Staff can issue timed mutes, indefinite role-based mutes, kicks, bans, and unbans. Commands check Discord permissions and role hierarchy, and timed mutes use Discord timeouts that expire without keeping the bot running.
+Jack was built when Discord bots handled much more of a server's moderation logic themselves. Features like temporary mutes were commonly implemented by assigning a restricted role, storing the mute state, and having the bot remove that role after a custom duration. That gave communities more control over mute lengths and also made it possible for a bot to maintain its own moderation history or statistics.
 
-Community tools include reaction-based quote approval, animal images, a latency check, and Mango's optional video replies. Deleted-message retrieval is disabled by default; when enabled, it exposes only the latest cached deleted text in the same channel within a five-minute window.
+Discord now provides native timeouts for much of this functionality, so Jack uses those where appropriate rather than recreating functionality the platform already handles. Staff can issue timed mutes, indefinite role-based mutes, kicks, bans, and unbans directly through the bot. Timed mutes expire through Discord itself, while role-based mutes remain available when a server needs behavior outside the native timeout system.
+
+Moderation commands also check Discord permissions and role hierarchy so staff cannot act beyond their authority and Jack cannot moderate members above its own role.
+
+Jack does not currently perform automatic slur or keyword filtering. That would be a separate moderation system if added later.
+
+Alongside moderation, Jack includes community features such as staff-reviewed quote submissions, optional deleted-message retrieval, animal-image commands, latency checks, and a few intentionally unserious commands such as Mango.
 
 ## How it works
 
